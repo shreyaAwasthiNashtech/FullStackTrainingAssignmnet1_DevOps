@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.orderApi.name }}
+  labels:
+    app: {{ .Values.orderApi.name }}
+spec:
+  replicas: {{ .Values.orderApi.replicaCount | default .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Values.orderApi.name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.orderApi.name }}
+    spec:
+      containers:
+        - name: {{ .Values.orderApi.name }}
+          image: "{{ .Values.orderApi.image.repository }}:{{ .Values.orderApi.image.tag }}"
+          imagePullPolicy: {{ .Values.orderApi.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.orderApi.service.targetPort }}
+              protocol: TCP
+          env:
+            - name: ORDER_PROCESSOR_URL
+              value: {{ .Values.orderApi.env.orderProcessorUrl | quote }}
+            - name: PORT
+              value: {{ .Values.orderApi.service.targetPort | quote }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.orderApi.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.orderApi.name }}
+  labels:
+    app: {{ .Values.orderApi.name }}
+spec:
+  type: {{ .Values.orderApi.service.type }}
+  ports:
+    - port: {{ .Values.orderApi.service.port }}
+      targetPort: {{ .Values.orderApi.service.targetPort }}
+      protocol: TCP
+      name: http
+  selector:
+    app: {{ .Values.orderApi.name }}

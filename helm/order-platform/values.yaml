@@ -1,0 +1,62 @@
+replicaCount: 1
+
+orderApi:
+  name: order-api
+  replicaCount: 1
+  image:
+    repository: order-api
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 5000
+    targetPort: 5000
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+  env:
+    orderProcessorUrl: "http://order-processor:5001/process"
+
+orderProcessor:
+  name: order-processor
+  replicaCount: 1
+  image:
+    repository: order-processor
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 5001
+    targetPort: 5001
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+  env:
+    notificationServiceUrl: "http://notification-service:5002/notify"
+
+notificationService:
+  name: notification-service
+  replicaCount: 1
+  image:
+    repository: notification-service
+    tag: v1.0.0
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 5002
+    targetPort: 5002
+  resources:
+    limits:
+      cpu: 200m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
