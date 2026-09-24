@@ -1,15 +1,14 @@
-# Azure Cost Management & Optimization Strategies
+# Infrastructure Cost Optimisation
 
-Cost efficiency is a first-class architectural requirement for production cloud workloads on Azure Kubernetes Service (AKS). Below are three concrete enterprise optimization strategies and an open-source observability solution.
+This note outlines production cost-reduction strategies for running the order processing platform on Azure Kubernetes Service (AKS).
 
 ---
 
-## Strategy 1: AKS Spot Node Pools for Non-Critical & Asynchronous Workers
-- **Mechanism:** Provision a secondary node pool using Azure Spot Virtual Machines (`priority = "Spot"`, `eviction_policy = "Delete"`).
-- **Cost Reduction:** **60% to 80% discount** compared to standard Pay-As-You-Go pricing.
-- **Application Target:** Microservices resilient to eviction and interruption, such as `notification-service`, background report generation, and asynchronous queue consumers.
-- **Implementation Pattern:**
-  - Use Kubernetes `tolerations` and `nodeSelector` / `nodeAffinity`:
+## 1. Spot Node Pools for Asynchronous Workloads
+- **Mechanism:** Run stateless, interruptible services on an Azure Spot node pool (`priority = "Spot"`, `eviction_policy = "Delete"`).
+- **Savings:** Between 60% and 80% compared with standard on-demand pricing.
+- **Suitability:** Suitable for `notification-service` and non-critical asynchronous tasks where evictions can be tolerated without data loss.
+- **Configuration:** Apply node affinity and tolerations in deployment manifests:
   ```yaml
   nodeSelector:
     kubernetes.azure.com/scalesetpriority: spot
@@ -19,45 +18,45 @@ Cost efficiency is a first-class architectural requirement for production cloud 
       value: "spot"
       effect: "NoSchedule"
   ```
-- **Trade-off Mitigation:** Run core ingress and transactional services (`order-api`) on on-demand nodes, routing background tasks to Spot instances.
+- Core transactional workloads (`order-api`) remain on regular on-demand nodes to maintain consistent latency.
 
 ---
 
-## Strategy 2: Horizontal Pod Autoscaler (HPA) Coupled with Cluster Autoscaler
-- **Mechanism:** Implement dynamic multi-tier autoscaling:
-  1. **HPA:** Scales pod replicas based on real-time CPU and Memory utilization (e.g., target 70% CPU).
-  2. **Cluster Autoscaler (CA):** Scales Azure VM scale set instances down to the minimum required nodes during off-peak hours (e.g., nights and weekends).
-- **Cost Reduction:** **40% to 65% reduction** in compute costs by eliminating idle overhead.
-- **Implementation in Terraform:**
-  ```hcl
-  default_node_pool {
-    name                = "default"
-    vm_size             = "Standard_B2s"
-    enable_auto_scaling = true
-    min_count           = 1
-    max_count           = 3
-  }
-  ```
-- **Resource Boundary Control:** All pods define strict `requests` (`50m` CPU / `128Mi` RAM) and `limits` (`200m` CPU / `256Mi` RAM), preventing noisy-neighbor starvation and enabling high bin-packing density.
+## 2. Horizontal Pod Autoscaling and Cluster Autoscaler
+- **Mechanism:** Combine Horizontal Pod Autoscaling (HPA) with the AKS Cluster Autoscaler.
+- **Savings:** Between 40% and 60% by scaling down worker nodes during periods of low activity (e.g. overnight and weekends).
+- **Implementation:**
+  - HPA adjusts replica counts dynamically based on target CPU thresholds (e.g. 70%).
+  - The node pool autoscaler adjusts the virtual machine scale set between minimum and maximum bounds:
+    ```hcl
+    default_node_pool {
+      name                = "default"
+      vm_size             = "Standard_B2s"
+      enable_auto_scaling = true
+      min_count           = 1
+      max_count           = 3
+      os_disk_size_gb     = 30
+    }
+    ```
+  - Defined resource requests (`50m` CPU / `128Mi` memory) and limits (`200m` CPU / `256Mi` memory) ensure efficient node bin-packing and prevent single pods from starving neighbours.
 
 ---
 
-## Strategy 3: Azure Reserved VM Instances (RI) for Baseline Workloads
-- **Mechanism:** Commit to a 1-year or 3-year term for predictable, 24/7 baseline capacity on AKS system nodes and primary databases.
-- **Cost Reduction:**
-  - **1-Year Commitment:** Up to **35% to 45% savings**.
-  - **3-Year Commitment:** Up to **50% to 55% savings**.
-- **Financial Flexibility:** Azure Reserved Instances allow instance size flexibility within the same VM series and can be exchanged or canceled with prorated adjustments.
+## 3. Azure Reserved VM Instances for Baseline Capacity
+- **Mechanism:** Commit to 1-year or 3-year Azure Reserved VM Instances for steady-state system nodes and baseline compute requirements.
+- **Savings:**
+  - 1-Year Commitment: approximately 35% to 45% discount.
+  - 3-Year Commitment: approximately 50% to 55% discount.
+- **Operation:** Combine baseline reserved capacity with on-demand and spot nodes for handling burst traffic.
 
 ---
 
-## Strategy 4: Container-Level Cost Observability with OpenCost (OSS)
-- **Mechanism:** Deploy **OpenCost** (Cloud Native Computing Foundation Sandbox project) directly into the AKS cluster.
-- **Features:**
-  - Allocates real-time cloud costs by namespace, deployment, pod, and container label.
-  - Reconciles Azure billing rate cards with actual Prometheus resource consumption metrics.
-  - Identifies over-provisioned containers where requested CPU/RAM exceeds historical 95th-percentile utilization.
-- **Local Deployment Command:**
+## 4. Workload Cost Attribution with OpenCost
+- **Mechanism:** Deploy OpenCost into the cluster for granular cost visibility.
+- **Capability:**
+  - Maps actual Azure billing rate cards to Kubernetes namespace, deployment, and pod resource consumption.
+  - Highlights over-provisioned containers where allocated CPU or memory requests consistently exceed actual 95th-percentile usage.
+- **Installation:**
   ```bash
   helm install opencost oci://quay.io/opencost/opencost-helm-chart \
     --namespace opencost --create-namespace

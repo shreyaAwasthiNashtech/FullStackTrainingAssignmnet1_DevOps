@@ -1,33 +1,29 @@
-# Troubleshooting Incident Post-Mortem & Runbook
+# Incident Runbook: Readiness Probe Failure
 
-## Incident Title: Pod Readiness Failure Post-Deployment Resulting in `0/1 Running` State
-
----
-
-### 1. Incident Overview
-- **Severity:** P2 (Deployment Blocked / Service Unreachable)
-- **Component:** `order-api` Deployment in Kubernetes
-- **Symptom:** After applying Helm deployment, the pod remained indefinitely in `Running` state with `0/1 Ready`. External requests returned HTTP 503 Service Unavailable / Connection Refused.
+## Symptom
+Following a deployment update, the pod remains in `Running` status with `0/1 Ready`. Requests routed through the service fail with HTTP 503 or connection timeouts.
 
 ---
 
-### 2. Detection & Diagnostic Triage
+## Triage Procedure
 
-#### Step 1: Inspect Pod Status
+### 1. Check Pod Health
+Inspect the status and readiness columns:
 ```bash
 kubectl get pods -l app=order-api
 ```
-*Output observed:*
+Example problematic output:
 ```
 NAME                         READY   STATUS    RESTARTS   AGE
 order-api-68748d8dbb-m2n9x   0/1     Running   0          4m
 ```
 
-#### Step 2: Investigate Events with `kubectl describe`
+### 2. Inspect Kubernetes Events
+Check warning messages recorded by the kubelet:
 ```bash
 kubectl describe pod -l app=order-api
 ```
-*Events log revealed:*
+Example event log:
 ```
 Events:
   Type     Reason     Age                From               Message
@@ -39,51 +35,42 @@ Events:
   Warning  Unhealthy  12s (x24 over 3m)  kubelet            Readiness probe failed: HTTP probe failed with statuscode: 404
 ```
 
-#### Step 3: Check Container Application Logs
+### 3. Review Application Logs
+Check access logs for rejected health check requests:
 ```bash
 kubectl logs -l app=order-api --tail=20
 ```
-*Log line discovered:*
+Example log entry:
 ```
 10.244.0.1 - - [24/Sep/2026 13:00:15] "GET /healthz HTTP/1.1" 404 -
 ```
 
 ---
 
-### 3. Root Cause Analysis (RCA)
-- The Flask microservice exposes its health check at `/health` (`@app.route("/health")`).
-- The Kubernetes Helm template had an erroneous path configured: `path: /healthz` instead of `path: /health`.
-- The kubelet periodically queried `http://<pod-ip>:5000/healthz`, which Flask rejected with `404 Not Found`.
-- Kubernetes readiness probes require HTTP status codes `>= 200` and `< 400` to mark the pod ready. Consequently, Kubernetes withheld the pod from the `Endpoints` list of the `order-api` Service, dropping all inbound traffic.
+## Root Cause
+The microservice exposes health checks on `/health`, whereas the Helm template defined the probe path as `/healthz`. Because the endpoint returned HTTP 404, the kubelet marked the container unready and excluded the pod IP from the Service endpoints list.
 
 ---
 
-### 4. Remediation & Verification
+## Resolution
 
-#### Step 1: Update Helm Template
-Correct the probe endpoint in `helm/order-platform/templates/order-api.yaml`:
-```yaml
-readinessProbe:
-  httpGet:
-    path: /health
-    port: http
-  initialDelaySeconds: 5
-  periodSeconds: 5
-```
+1. Correct the probe path in `helm/order-platform/templates/order-api.yaml`:
+   ```yaml
+   readinessProbe:
+     httpGet:
+       path: /health
+       port: http
+     initialDelaySeconds: 5
+     periodSeconds: 5
+   ```
 
-#### Step 2: Upgrade Helm Release
-```bash
-helm upgrade --install order-platform ./helm/order-platform
-```
+2. Redeploy the chart:
+   ```bash
+   helm upgrade --install order-platform ./helm/order-platform
+   ```
 
-#### Step 3: Confirm Pod Convergence
-```bash
-kubectl rollout status deployment/order-api --timeout=60s
-kubectl get pods -l app=order-api
-```
-*Output confirmed:*
-```
-deployment "order-api" successfully rolled out
-NAME                         READY   STATUS    RESTARTS   AGE
-order-api-79dbcc6dc9-x4248   1/1     Running   0          18s
-```
+3. Confirm pod readiness:
+   ```bash
+   kubectl rollout status deployment/order-api --timeout=60s
+   kubectl get pods -l app=order-api
+   ```
