@@ -60,7 +60,7 @@ Client ---> [order-api:5000] ---> [order-processor:5001] ---> [notification-serv
             PROCESSED                  PROCESSED                        DISPATCHED
 ```
 
-1. **`order-api`**: Ingress service; validates payload schemas, forwards orders to the processor service, and responds with `HTTP 202 Accepted`.
+1. **`order-api`**: Ingress service; validates payload schemas, forwards orders to the processor service, and responds with HTTP 202 Accepted.
 2. **`order-processor`**: Business logic service; validates order IDs, handles order workflow, and invokes the notification service.
 3. **`notification-service`**: Notification dispatch service; validates recipient details and dispatches confirmation messages.
 
@@ -143,13 +143,13 @@ make clean        # Remove Helm release
 ## 4. Evaluation Questions & Answers
 
 ### Q1: How does inter-service communication and service discovery work across pods?
-**Answer:** Microservices communicate using standard HTTP REST over Kubernetes ClusterIP Services. Kubernetes CoreDNS resolves service names (e.g. `http://order-processor:5001/process`) to the virtual IP of the respective ClusterIP service. Kube-proxy routes traffic across available, healthy pod replicas matching the selector `app: <service-name>`.
+**Answer:** Microservices communicate using standard HTTP REST over Kubernetes ClusterIP Services. Kubernetes CoreDNS resolves service names (e.g. http://order-processor:5001/process) to the virtual IP of the respective ClusterIP service. Kube-proxy routes traffic across available, healthy pod replicas matching the selector app: <service-name>.
 
 ### Q2: How is container security implemented according to least-privilege principles?
 **Answer:**
 1. Base images use minimal `python:3.11-slim` without development packages or compilers.
-2. Services execute under an unprivileged user `appuser` (UID `8888`), preventing container break-outs from inheriting root privileges on the host.
-3. Native `HEALTHCHECK` definitions are built directly into Dockerfiles.
+2. Services execute under an unprivileged user (UID 8888), preventing container break-outs from inheriting root privileges on the host.
+3. Native HEALTHCHECK definitions are built directly into Dockerfiles.
 4. CI checks run **Gitleaks** for secret detection and **Aqua Trivy** for filesystem and container vulnerability scans.
 
 ### Q3: How do readiness and liveness probes ensure zero-downtime rolling updates?
@@ -159,14 +159,14 @@ make clean        # Remove Helm release
 
 ### Q4: How are Azure cloud costs controlled in production AKS deployments?
 **Answer:**
-1. **Spot Node Pools:** Run non-critical or asynchronous workers (`notification-service`) on Spot instances for 60-80% discounts.
+1. **Spot Node Pools:** Run non-critical or asynchronous workers (notification-service) on Spot instances for 60-80% discounts.
 2. **Cluster Autoscaler & HPA:** Automatically adjust replica counts and scale node count between 1 and 3 instances based on real-time CPU/memory utilization, scaling down during off-peak periods.
 3. **Reserved VM Instances:** 1-year or 3-year commitments for predictable baseline compute capacity (35-55% savings).
 4. **OpenCost:** In-cluster cost allocation mapping container resource requests and usage against cloud billing rates.
 
 ### Q5: How is continuous integration and automated quality enforcement structured?
-**Answer:** The GitHub Actions workflow (`.github/workflows/ci-cd.yml`) runs four sequential stages:
-1. `lint-and-test`: Parallel matrix testing running `flake8` linter and `pytest` unit tests across all microservices.
+**Answer:** The GitHub Actions workflow (.github/workflows/ci-cd.yml) runs four sequential stages:
+1. `lint-and-test`: Parallel matrix testing running flake8 linter and pytest unit tests across all microservices.
 2. `security-scan`: Secret scanning using Gitleaks and filesystem vulnerability assessment using Trivy.
-3. `docker-build-and-scan`: Builds Docker images tagged with `${{ github.sha }}` and scans container layers.
-4. `helm-validation`: Executes `helm lint` and dry-run template rendering (`helm template`) before deployment.
+3. `docker-build-and-scan`: Builds Docker images tagged with ${{ github.sha }} and scans container layers.
+4. `helm-validation`: Executes helm lint and dry-run template rendering (helm template) before deployment.
