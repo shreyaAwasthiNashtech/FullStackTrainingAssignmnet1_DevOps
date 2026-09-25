@@ -147,7 +147,7 @@ make clean        # Remove Helm release
 
 ### Q2: How is container security implemented according to least-privilege principles?
 **Answer:**
-1. Base images use minimal `python:3.11-slim` without development packages or compilers.
+1. Base images use minimal python:3.11-slim without development packages or compilers.
 2. Services execute under an unprivileged user (UID 8888), preventing container break-outs from inheriting root privileges on the host.
 3. Native HEALTHCHECK definitions are built directly into Dockerfiles.
 4. CI checks run **Gitleaks** for secret detection and **Aqua Trivy** for filesystem and container vulnerability scans.
@@ -155,7 +155,7 @@ make clean        # Remove Helm release
 ### Q3: How do readiness and liveness probes ensure zero-downtime rolling updates?
 **Answer:**
 - **Liveness Probes:** Restart containers if the application process stops responding.
-- **Readiness Probes:** Prevent traffic routing to pods until their internal initialisation is complete. During rolling updates (`helm upgrade`), traffic stays on existing replicas until newly spawned pods pass readiness checks, avoiding dropped requests.
+- **Readiness Probes:** Prevent traffic routing to pods until their internal initialisation is complete. During rolling updates (helm upgrade), traffic stays on existing replicas until newly spawned pods pass readiness checks, avoiding dropped requests.
 
 ### Q4: How are Azure cloud costs controlled in production AKS deployments?
 **Answer:**
@@ -166,7 +166,7 @@ make clean        # Remove Helm release
 
 ### Q5: How is continuous integration and automated quality enforcement structured?
 **Answer:** The GitHub Actions workflow (.github/workflows/ci-cd.yml) runs four sequential stages:
-1. `lint-and-test`: Parallel matrix testing running flake8 linter and pytest unit tests across all microservices.
-2. `security-scan`: Secret scanning using Gitleaks and filesystem vulnerability assessment using Trivy.
-3. `docker-build-and-scan`: Builds Docker images tagged with ${{ github.sha }} and scans container layers.
-4. `helm-validation`: Executes helm lint and dry-run template rendering (helm template) before deployment.
+1. lint-and-test: Parallel matrix testing running flake8 linter and pytest unit tests across all microservices.
+2. security-scan: Secret scanning using Gitleaks and filesystem vulnerability assessment using Trivy.
+3. docker-build-and-scan: Builds Docker images tagged with ${{ github.sha }} and scans container layers.
+4. helm-validation: Executes helm lint and dry-run template rendering (helm template) before deployment.
